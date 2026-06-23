@@ -36,7 +36,7 @@ function App() {
   const fullTextString = textArray.join(" ");
   const cursorRef = useRef(null);
   
-  // FIX: Ref targeting our newly added hidden mobile input layer
+  // Ref targeting our hidden mobile input layer
   const hiddenInputRef = useRef(null);
 
   const { isDictating, speechProgress, startDictation, stopDictation } = useDictation(() => forceFinish(), selectedVoiceURI);
@@ -77,29 +77,41 @@ function App() {
     if (isLoading) return <span className="text-slate-300">Loading engine...</span>;
     const expectedChars = fullTextString.split('');
     const currentTypedSpaceCount = (typedText.match(/ /g) || []).length;
+    
+    const wordBlocks = [];
+    let currentWordChars = [];
     let spaceCount = 0;
-    const charWordIndices = expectedChars.map(char => {
-        const current = spaceCount;
-        if (char === ' ') spaceCount++;
-        return current;
-    });
 
-    return expectedChars.map((char, index) => {
+    expectedChars.forEach((char, index) => {
       const isTyped = index < typedText.length;
       const isCurrent = index === typedText.length;
       const isCorrect = isTyped && typedText[index] === char;
-      const belongsToWordIndex = charWordIndices[index];
-      const isRevealed = !isDictationEnabled || belongsToWordIndex < currentTypedSpaceCount;
-      return (
+      const isRevealed = !isDictationEnabled || spaceCount < currentTypedSpaceCount;
+
+      // Add the letter to our current word bucket
+      currentWordChars.push(
         <CharacterSpan 
           key={index} char={char} isTyped={isTyped} isCurrent={isCurrent}
           isCorrect={isCorrect} isRevealed={isRevealed} ref={isCurrent ? cursorRef : null}
         />
       );
+
+      // If the character is a space, or it's the very last letter, wrap up the Word Block
+      if (char === ' ' || index === expectedChars.length - 1) {
+        wordBlocks.push(
+          <span key={`word-${spaceCount}`} className="inline-flex gap-x-[1px] mr-3 md:mr-4 mb-2">
+            {currentWordChars}
+          </span>
+        );
+        currentWordChars = []; // Empty the bucket for the next word
+        if (char === ' ') spaceCount++;
+      }
     });
+
+    return wordBlocks;
   };
 
-  // FIX: Focuses the invisible input field to force the mobile keyboard layout open
+  // Focuses the invisible input field to force the mobile keyboard layout open
   const handleContainerClick = () => {
     if (status !== 'finished') {
       hiddenInputRef.current?.focus();
@@ -144,7 +156,7 @@ function App() {
                   </div>
                 )}
 
-                {/* FIX: Added mobile input elements to map virtual keystrokes smoothly */}
+                {/* Mobile input elements to map virtual keystrokes smoothly */}
                 <input
                   ref={hiddenInputRef}
                   type="text"
@@ -166,10 +178,10 @@ function App() {
                   spellCheck="false"
                 />
 
-                {/* FIX: Replaced 'break-all' with 'break-words flex flex-wrap' and 'overflow-y-auto' for clean text bounding */}
+                {/* Text Container with Word Wrap fix */}
                 <div 
                   onClick={handleContainerClick}
-                  className="bg-slate-50 border border-slate-100 p-8 rounded-xl text-[24px] md:text-[28px] leading-[1.6] tracking-wide font-mono break-words shadow-inner h-[250px] overflow-y-auto relative cursor-text select-none focus:outline-none flex flex-wrap content-start items-center gap-x-[2px]"
+                  className="bg-slate-50 border border-slate-100 p-8 rounded-xl text-[24px] md:text-[28px] leading-[1.6] tracking-wide font-mono break-words shadow-inner h-[250px] overflow-y-auto relative cursor-text select-none focus:outline-none flex flex-wrap content-start items-center"
                 >
                   {renderTextDisplay()}
                 </div>
