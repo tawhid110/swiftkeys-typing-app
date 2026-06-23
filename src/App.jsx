@@ -16,7 +16,7 @@ const CharacterSpan = memo(forwardRef(({ char, isTyped, isCurrent, isCorrect, is
       return <span className="opacity-0">{char}</span>;
   }
   return (
-    <span className="relative">
+    <span className="relative inline-block">
       {isCurrent && <span ref={ref} className="absolute -left-[1px] top-0 h-full w-[2px] bg-slate-800 animate-pulse z-10" />}
       <span className={`${bgColor} ${textColor} rounded-sm px-[1px]`}>{char}</span>
     </span>
@@ -25,7 +25,6 @@ const CharacterSpan = memo(forwardRef(({ char, isTyped, isCurrent, isCorrect, is
 CharacterSpan.displayName = "CharacterSpan";
 
 function App() {
-  // NEW: Pulled wordLimit from context to pass into useEngine
   const { testMode, timeLimit, wordLimit, includePunctuation, includeNumbers, wordListType, isDictationEnabled, selectedVoiceURI, currentLanguage } = useAppContext();
   
   const { 
@@ -36,6 +35,9 @@ function App() {
   
   const fullTextString = textArray.join(" ");
   const cursorRef = useRef(null);
+  
+  // FIX: Ref targeting our newly added hidden mobile input layer
+  const hiddenInputRef = useRef(null);
 
   const { isDictating, speechProgress, startDictation, stopDictation } = useDictation(() => forceFinish(), selectedVoiceURI);
 
@@ -53,6 +55,7 @@ function App() {
     }
   }, [typedText, status]);
 
+  // Keep desktop global listener working cleanly while ignoring keys when interacting with input elements
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       if (document.activeElement.tagName !== 'BUTTON' && document.activeElement.tagName !== 'SELECT' && document.activeElement.tagName !== 'INPUT') {
@@ -63,7 +66,12 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleKeyDown]);
 
-  const handleRestart = () => { stopDictation(); resetTest(); };
+  const handleRestart = () => { 
+    stopDictation(); 
+    resetTest(); 
+    // Auto-focus the input again upon clicking restart
+    setTimeout(() => hiddenInputRef.current?.focus(), 50);
+  };
 
   const renderTextDisplay = () => {
     if (isLoading) return <span className="text-slate-300">Loading engine...</span>;
@@ -89,6 +97,13 @@ function App() {
         />
       );
     });
+  };
+
+  // FIX: Focuses the invisible input field to force the mobile keyboard layout open
+  const handleContainerClick = () => {
+    if (status !== 'finished') {
+      hiddenInputRef.current?.focus();
+    }
   };
 
   return (
@@ -129,7 +144,33 @@ function App() {
                   </div>
                 )}
 
-                <div className="bg-slate-50 border border-slate-100 p-8 rounded-xl text-[28px] leading-[1.6] tracking-wide font-mono break-all shadow-inner h-[250px] overflow-hidden relative cursor-default select-none focus:outline-none">
+                {/* FIX: Added mobile input elements to map virtual keystrokes smoothly */}
+                <input
+                  ref={hiddenInputRef}
+                  type="text"
+                  value={typedText}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    // Intercept and route deletions vs insertions cleanly into useEngine logic
+                    if (newValue.length < typedText.length) {
+                      handleKeyDown({ key: 'Backspace', ctrlKey: false });
+                    } else if (newValue.length > typedText.length) {
+                      const addedChar = newValue[newValue.length - 1];
+                      handleKeyDown({ key: addedChar, preventDefault: () => {} });
+                    }
+                  }}
+                  className="absolute opacity-0 pointer-events-none w-0 h-0"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+
+                {/* FIX: Replaced 'break-all' with 'break-words flex flex-wrap' and 'overflow-y-auto' for clean text bounding */}
+                <div 
+                  onClick={handleContainerClick}
+                  className="bg-slate-50 border border-slate-100 p-8 rounded-xl text-[24px] md:text-[28px] leading-[1.6] tracking-wide font-mono break-words shadow-inner h-[250px] overflow-y-auto relative cursor-text select-none focus:outline-none flex flex-wrap content-start items-center gap-x-[2px]"
+                >
                   {renderTextDisplay()}
                 </div>
               </div>
